@@ -1,0 +1,4 @@
+**/.DS_Store
+node_modules/
+src/_config.txt
+src/__config.ts

@@ -1,0 +1,42 @@
+{
+  "name": "supersend",
+  "version": "0.1.0",
+  "description": "A separate backend for sending messages with templates via email, slack, discord etc.",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node --files src/",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dkaraush/supersend.git"
+  },
+  "keywords": [
+    "nodejs",
+    "email",
+    "slack",
+    "discord",
+    "sender",
+    "backend"
+  ],
+  "author": "dkaraush@gmail.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/dkaraush/supersend/issues"
+  },
+  "homepage": "https://github.com/dkaraush/supersend#readme",
+  "dependencies": {
+    "@types/colors": "^1.2.1",
+    "@types/yaml": "^1.2.0",
+    "chokidar": "^3.3.1",
+    "colors": "^1.4.0",
+    "fs": "0.0.1-security",
+    "http": "0.0.0",
+    "https": "^1.0.0",
+    "os": "^0.1.1",
+    "ts-node": "^8.6.2",
+    "typescript": "^3.8.3",
+    "util": "^0.12.2",
+    "yaml": "^1.7.2"
+  }
+}
