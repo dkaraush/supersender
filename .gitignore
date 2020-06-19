@@ -2,3 +2,4 @@
 node_modules/
 src/_config.txt
 src/__config.ts
+**.x.ts

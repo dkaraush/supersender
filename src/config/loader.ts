@@ -1,62 +1,12 @@
 import {homedir} from 'os';
 import {promisify} from 'util';
-import {
-    readFile as _readFile,
-    exists as _exists,
-    mkdir as _mkdir
-} from 'fs';
 import * as YAML from 'yaml';
+
 import errors from './errors';
+import ConfigResolver, { ResolvedString } from './resolver';
+import {asyncfs as fs, FSCache} from '../utils';
+import {join, resolve} from 'path';
 
-const readFile = promisify(_readFile);
-const exists = promisify(_exists);
-const mkdir = promisify(_mkdir);
-
-const recursiveObjectMap = (obj : any, func) => {
-    if (typeof obj === 'object' && obj !== null) {
-        for (let key in obj) {
-            if (typeof obj[key] === 'object' && obj !== null)
-                recursiveObjectMap(obj[key], func);
-            else func(obj, key);
-        }
-    }
-};
-
-class LoaderTag {
-    private path : string;
-    private recursivePath : string[];
-    constructor(path : string, recursivePath : string[]) {
-        this.path = path;
-        this.recursivePath = recursivePath;
-    }
-
-    public tag = {
-        tag: '!load',
-        identify: x => false,
-        resolve: this.resolve.bind(this)
-    };
-    resolve(doc, cst) {
-        let filename = cst.strValue;
-        let index;
-        if ((index = this.recursivePath.indexOf(filename)) >= 0) {
-            this.recursivePath.push(filename);
-            throw new errors.LoadLoop(this.recursivePath, index, this.recursivePath.length - 1);
-        }
-
-        return async (obj, key) => {
-            obj[key] = await ConfigLoader.load(filename, true, this.path, [...this.recursivePath]);
-        };
-    }
-
-    async loadAll(obj : any) {
-        let promises = [];
-        recursiveObjectMap(obj, (obj : any, key : string) => {
-            if (typeof obj[key] === 'function')
-                promises.push(obj[key](obj, key));
-        });
-        return Promise.all(promises);
-    }
-}
 class FileTag {
     static tag = "!file";
     static identify = () => false;
@@ -77,30 +27,48 @@ class ConfigLoader {
 
     static async load(
         filename : string,
-        multiple : boolean = true,
-        path : string = homedir() + '/.supersender/',
-        recursivePath : string[] = new Array()
+        path : string = join(homedir(), '/.supersender/'),
+        fscache? : FSCache
     ) : Promise<any> {
-        if (path[path.length - 1] !== '/')
-            path += '/';
+        let raw = (await (fscache || fs).readFile(join(path, filename))).toString();
 
-        recursivePath.push(filename);
-
-        let raw = (await readFile(path + filename)).toString();
-        let tags = this.tags, loader;
-        if (multiple) {
-            loader = new LoaderTag(path, recursivePath);
-            tags = tags.concat(loader.tag);
-        }
-
-        let parsed = YAML.parse(raw, <YAML.ParseOptions> {
+        return YAML.parse(raw, <YAML.ParseOptions> {
             prettyErrors: true,
-            customTags: tags
+            customTags: this.tags.concat(ToLoad.tag(path, fscache || null))
         });
-        if (multiple)
-            await loader.loadAll(parsed);
+    }
+}
 
-        return parsed;
+export class ToLoad {
+    public $TYPE = 'TOLOAD';
+    public static tag (rootpath : string, fs : FSCache | null) {
+        return {
+            tag: '!load',
+            identify: x => false,
+            resolve: ToLoad.create.bind(null, fs, rootpath)
+        };
+    }
+
+    private rootpath : string;
+    private fs: FSCache | null;
+    path: string;
+    private constructor(rootpath : string, fs : FSCache | null, path: string) {
+        this.rootpath = rootpath;
+        this.fs = fs;
+        this.path = path;
+    }
+
+    async load(resolvedPath: ResolvedString) : Promise<any> {
+        return await ConfigLoader.load(resolvedPath.value, this.rootpath, this.fs);
+    }
+
+    public static create(
+        fs: FSCache | null,
+        rootpath : string,
+        doc : YAML.ast.Document,
+        cst : YAML.cst.BlockValue
+    ) : ToLoad {
+        return new ToLoad(rootpath, fs, cst.strValue);
     }
 }
 

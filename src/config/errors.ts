@@ -1,5 +1,6 @@
 import {bold} from 'colors';
 import { PathElement, ResolvedObject, ResolvedString } from './resolver';
+import { ToLoad } from './loader';
 
 // symbolsCount(0) => 1
 // symbolsCount(9) => 1
@@ -12,7 +13,6 @@ const symbolsCount = (val : number) => {
 const formatValue = (val : any) => {
     if (val === null || val === undefined)
         return undefined;
-    
     if (val instanceof ResolvedString)
         return ('"'+val.value+'"').green + (val.value !== val.raw ? ' ← ' + ('"'+val.raw+'"').grey : '');
     if (typeof val === 'string')
@@ -39,7 +39,7 @@ class ConfigResolverError extends Error {
     static showRecursivePath(path : PathElement[], root : any) : string {
         return path.map((pathElement : PathElement, i : number) => {
             let value = formatValue(pathElement.value);
-            return '    ' + (formatNum(i+1, symbolsCount(path.length), ' ', true) + '. ').yellow + bold(pathElement.scope) + (value ? ' = ' + value : '')
+            return '    ' + ((i+1).toString().padStart(symbolsCount(path.length), ' ') + '. ').yellow + bold(pathElement.scope) + (value ? ' = ' + value : '')
         }).join('\n');
     }
 }
@@ -104,7 +104,9 @@ class LoadLoop extends Error {
                 o = 2;
             if (i == to)
                 o = 3;
-            return '    ' + (['  ','.→','↑ ','.←'])[o] + ' ' + (formatNum(i+1, symbolsCount(path.length), ' ', true) + '. ').yellow + bold(filename)
+            return '    ' + (['  ','.→','↑ ','.←'])[o] + ' ' + 
+                    ((i+1).toString().padStart(symbolsCount(path.length), ' ') + '. ').yellow + 
+                    bold(filename);
         }).join('\n');
     }
 }
@@ -162,12 +164,14 @@ class BadRequest extends Error {
 const {isArray} = Array;
 const isObject = (a : any) : boolean => typeof a === 'object' && a != null && !isArray(a);
 
-// type() is used only for pretty errors and isn't used in resolving at all
+// type() is used only for pretty errors and isn't used in resolving at all!
 const typeString = (a : any) : string => {
     if (a instanceof ResolvedObject)
         return 'ResolvedObject';
     if (a instanceof ResolvedString)
         return 'ResolvedString';
+    if (a instanceof ToLoad)
+        return 'ToLoad(' + a.path + ')';
     if (isObject(a))
         return 'object';
     if (isArray(a))

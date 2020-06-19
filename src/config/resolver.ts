@@ -1,5 +1,7 @@
 import {bold} from 'colors';
 import errors from './errors';
+import {arraysAreEqual, clone, isArray, isObject, replaceAsync} from '../utils';
+import { ToLoad } from './loader';
 
 /*
                 __
@@ -9,19 +11,9 @@ import errors from './errors';
     <__.|_|-|_|
 */
 
-const {isArray} = Array;
-const isObject = (a : any) : boolean => typeof a === 'object' && a != null && !isArray(a);
-const clone = (a : any) => {
-    if (isArray(a))
-        return [...a];
-    if (isObject(a))
-        return Object.assign({}, a);
-    return a;
-}
-
 class ConfigResolver {
     static readonly separator = '.';
-    static readonly separateRegExp = new RegExp('\\' + ConfigResolver.separator, 'g');
+    private static readonly separateRegExp = new RegExp('\\' + ConfigResolver.separator, 'g');
 
     /*
         cantInherit() answers to the question: "Can `from` object actually inherit `that` object?"
@@ -32,7 +24,7 @@ class ConfigResolver {
             thatDirs = that.split(this.separateRegExp);
         if (thatDirs.length > fromDirs.length)
             return false;
-        return arraysEqual(fromDirs.slice(0, fromDirs.length), thatDirs.slice(0, fromDirs.length));
+        return arraysAreEqual(fromDirs.slice(0, fromDirs.length), thatDirs.slice(0, fromDirs.length));
     }
 
     /*
@@ -59,23 +51,23 @@ class ConfigResolver {
             1. resolving inherits
             2. resolving all values recursively (in the source object only)
     */
-    public static resolve(
+    public static async resolve(
         root : any, 
         path : ResolvedString | string, 
         pointer? : Pointer, 
         first : boolean = true, 
         all : boolean = true, 
         recursivePath : PathElement[] = []
-    ) : ResolvedObject {
-        // do not make changes to the root itself:
-        if (first)
-            root = clone(root);
+    ) : Promise<ResolvedObject> {
+        // // do not make changes to the root itself:
+        // if (first)
+        //     root = clone(root);
 
         if (typeof path === 'string')
-            path = this.resolveString('~', path, root, clone(recursivePath));
+            path = await this.resolveString('~', path, root, clone(recursivePath));
     
         if (pointer === undefined)
-            pointer = this.access(path.toString(), root, clone(recursivePath));
+            pointer = await this.access(path.toString(), root, clone(recursivePath));
 
         let object = pointer.get();
         if (!isObject(object) && !isArray(object))
@@ -85,18 +77,18 @@ class ConfigResolver {
             return object;
 
         if (isObject(object) && object.inherits)
-            this.resolveInherits(object, path, root, recursivePath);
+            await this.resolveInherits(object, path, root, recursivePath);
 
         if (all) {
             for (let key of Object.keys(object)) {
                 let value = object[key];
                 let scope = path + this.separator + key;
                 if (typeof value === 'string') {
-                    object[key] = this.resolveString(scope, value, root, recursivePath);
+                    object[key] = await this.resolveString(scope, value, root, recursivePath);
                 } else if (typeof value === 'object' && 
                            !(value instanceof ResolvedString) && 
                            !(value instanceof ResolvedObject)) {
-                    object[key] = this.resolve(root, scope, new Pointer(object, key), false, true, recursivePath);
+                    object[key] = await this.resolve(root, scope, new Pointer(object, key), false, true, recursivePath);
                 }
             }
         }
@@ -112,12 +104,12 @@ class ConfigResolver {
         resolveInherits() tries to "inherit" another objects: 
             finds each object by their pathes and put all values into source object
     */
-    private static resolveInherits(
+    private static async resolveInherits(
         object : any, 
         path : ResolvedString, 
         root : any, 
         recursivePath : PathElement[] = []
-    ) {
+    ) : Promise<void> {
         let inherits = object.inherits;
         if (typeof inherits === 'string' || inherits instanceof ResolvedString)
             inherits = [ inherits ];
@@ -127,7 +119,7 @@ class ConfigResolver {
                 let inheritPath = path.toString() + '.inherits[' + i + ']';
                 let inherit = inherits[i];
                 if (!(inherit instanceof ResolvedString))
-                    inherit = this.resolveString(inheritPath, inherit, root, recursivePath);
+                    inherit = await this.resolveString(inheritPath, inherit, root, recursivePath);
                 if (typeof inherit !== 'string' && !(inherit instanceof ResolvedString))
                     throw new errors.WrongType(inheritPath, errors.type(inherit), 'string', recursivePath, root);
                 
@@ -135,23 +127,27 @@ class ConfigResolver {
                     throw new errors.Inheritance(
                         inherit.toString(), 
                         path.toString(), 
-                        cloneAndAppend(
-                            recursivePath,
-                            <PathElement> {scope: inheritPath, value: inherit}
-                        ), root);
+                        recursivePath.concat([{scope: inheritPath, value: inherit}]),
+                        root
+                    );
                 }
 
-                let inheritObject = this.access(
+                let inheritObject = (await this.access(
                     inherit.toString(), 
                     root, 
-                    cloneAndAppend(recursivePath, <PathElement> {scope: inheritPath, value: inherit})
-                ).get();
+                    recursivePath.concat([{scope: inheritPath, value: inherit}])
+                )).get();
                 if (!isObject(inheritObject)) {
-                    throw new errors.WrongType(inherit.toString(), errors.type(inheritObject), 'object', cloneAndAppend(
-                        recursivePath, 
-                        <PathElement> {scope: inheritPath, value: inherit},
-                        <PathElement> {scope: inherit.toString(), value: inheritObject}
-                    ), root);
+                    throw new errors.WrongType(
+                        inherit.toString(),
+                        errors.type(inheritObject),
+                        'object',
+                        recursivePath.concat([
+                            <PathElement> {scope: inheritPath, value: inherit},
+                            <PathElement> {scope: inherit.toString(), value: inheritObject}
+                        ]),
+                        root
+                    );
                 }
 
                 for (let key of Object.keys(inheritObject))
@@ -170,25 +166,21 @@ class ConfigResolver {
         resolveString() tries to replace all brackets in string with their values
         Also, if it accesses another string, it will resolve it, too, and save its resolved state.
     */
-	private static resolveString(
+	public static async resolveString(
         from : string,
         source : string, 
         root : any, 
         recursivePath : PathElement[] = []
-    ) : ResolvedString {
+    ) : Promise<ResolvedString> {
         const bracketsRegExp = /\{\{([^\{\}]+)\}\}/g;
         let string = source;
         while (bracketsRegExp.test(string)) {
-            string = string.replace(bracketsRegExp, (_ : any, path : string) : string => {
-                let pointer = this.access(path, root, cloneAndAppend(recursivePath, <PathElement> {
-                    scope: from
-                }));
+            string = await replaceAsync(string, bracketsRegExp, async (_ : any, path : string) : Promise<string> => {
+                let pointer = await this.access(path, root, recursivePath.concat([{scope: from}]));
                 let val = pointer.get();
             
                 if (typeof val === 'string') {
-                    val = this.resolveString(from, val, root, cloneAndAppend(recursivePath, <PathElement> {
-                       scope: from
-                    }));
+                    val = await this.resolveString(from, val, root, recursivePath.concat([{scope: from}]));
                     pointer.set(val);
                     return val.toString();
                 } else if (val instanceof ResolvedString) {
@@ -211,11 +203,11 @@ class ConfigResolver {
         Basically, it returns not a value itself, but a pointer to it.
         So, another function can change its value afterwards and it will be saved in root object.
     */
-    private static access(
+    private static async access(
         path: ResolvedString | string, 
         root: any, 
         recursivePath : PathElement[] = []
-    ) : Pointer {
+    ) : Promise<Pointer> {
         let dirs = path.toString().split(this.separateRegExp);
         let o = root;
         let lastParent = o;
@@ -237,10 +229,29 @@ class ConfigResolver {
                 !(o instanceof ResolvedString) &&
                 (isLast || typeof o[dirs[i+1]] === 'undefined') &&
                 !recursivePath.map(el => el.scope.toString()).includes(passedPathString)) {
-                o = this.resolve(root, passedPathString, new Pointer(lastParent, dir), false, false, cloneAndAppend(recursivePath, <PathElement> {
-                    scope: passedPathString,
-                    value: o
-                }));
+
+                o = await this.resolve(
+                    root,
+                    passedPathString,
+                    new Pointer(lastParent, dir),
+                    false,
+                    false,
+                    recursivePath.concat([<PathElement> {
+                        scope: passedPathString,
+                        value: o
+                    }])
+                );
+            }
+
+            if (o instanceof ToLoad || (typeof o === 'object' && o.$TYPE === 'TOLOAD')) {
+                lastParent[dir] = o = await o.load(
+                    await this.resolveString(
+                        passedPath.join(this.separator),
+                        o.path,
+                        root,
+                        recursivePath.concat([{scope: passedPathString, value: o}])
+                    )
+                );
             }
 
         }
@@ -269,18 +280,6 @@ class Pointer {
         this.parent[this.key] = val;
     }
 }
-
-const cloneAndAppend = (array : Array<any>, ...elements : any[]) => {
-    return array.concat(elements);
-}
-const arraysEqual = (a : Array<any>, b : Array<any>) : boolean => {
-    if (a.length !== b.length)
-        return false;
-    for (let i = 0; i < a.length; ++i)
-        if (a[i] !== b[i])
-            return false;
-    return true;
-};
 
 class ResolvedObject extends Object {
     constructor(obj : Object) {
