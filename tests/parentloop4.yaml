@@ -1,0 +1,8 @@
+expected: error
+
+a:
+  b:
+    inherits: a
+
+result:
+  inherits: 'a.b'
