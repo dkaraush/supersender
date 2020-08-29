@@ -1,0 +1,14 @@
+expected:
+  u: 3
+
+a:
+  inherits: [b, c]
+
+b: 
+  inherits: c
+
+c: 
+  u: 3
+
+result: 
+  inherits: a

@@ -1,0 +1,20 @@
+expected: 
+  a: 2
+  b: 
+    c: 
+      1  
+
+A:
+  a: 2
+  inherits: B
+
+B:
+  b:
+    inherits: C
+
+C:
+  c:
+   1
+
+result:
+  inherits: A
