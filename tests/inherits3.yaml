@@ -1,0 +1,14 @@
+expected: 
+  a: 1
+
+A: 
+  a: 1
+
+b: 
+  link: 'A'
+
+c:
+  inherits: b
+
+result:
+  inherits: '{{c.link}}'

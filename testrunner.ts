@@ -24,8 +24,7 @@ const removeLastLine = () => process.stdout.write('\r\x1b[K');
         const log = (status?: boolean, reason: string = '') => {
             const statuses : any = {
                 'false': red('⨉'),
-                'true': green('✓'),
-                'undefined': grey('☃')
+                'true': green('✓')
             };
             removeLastLine();
             puts(statuses[status + ""], file, grey(reason));
@@ -35,9 +34,9 @@ const removeLastLine = () => process.stdout.write('\r\x1b[K');
 
         try {
             const actual = await bubble.content.result.resolve();
-            log(equal(actual, expected, { strict: true }), JSON.stringify(actual) + ' !== ' + JSON.stringify(expected));
+            log(equal(actual, expected, { strict: true }), JSON.stringify(actual) + ' === ' + JSON.stringify(expected));
         } catch (e) {
-            log(expected === 'error', 'expected an error');
+            log(expected === 'error', 'not expected an error');
             if (expected !== 'error')
                 throw e;
         }

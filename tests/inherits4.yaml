@@ -1,0 +1,17 @@
+expected:
+  d:
+    a: key
+    key: a
+  it: works
+
+a:
+  it: works
+
+c:
+  a: key
+  key: a
+
+result:
+  d:
+    inherits: 'c'
+  inherits: '{{c.{{result.d.a}}}}'

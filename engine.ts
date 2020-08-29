@@ -33,7 +33,7 @@ type Bubble = {
     accessChain: (context: LoggingContext, path: string) => Promise<Bubble>;
     bubblizeChild: (key: string | number, value: any) => void;
     childBubble: (context: LoggingContext, fieldname: string) => Promise<Bubble>;
-    fieldsIterator: (context: LoggingContext, searchedFieldName?: string) => Promise<FieldsIterator>; 
+    fieldsIterator: (context: LoggingContext, searchedFieldName?: string, setOfParentClasses?: {[key: string]: number}) => Promise<FieldsIterator>; 
     resolve: (context: LoggingContext) => any;
 } & (BubbleString | BubbleArray | BubbleObject | BubblePrimitive);
 
@@ -104,10 +104,13 @@ export function bubble (
             throw new Error("no such field: "+fieldname+" for "+b.path);
         },
         // EITHER searching for one field OR returning all fields
-        fieldsIterator: async (context, searchedFieldName?: string) => {
+        fieldsIterator: async (context, searchedFieldName?: string, setOfParentClasses: {[key: string]: number} = {}) => {
             if (b.type !== "object")
-                throw new Error("iterating over non-object: "+b.path);
-
+				throw new Error("iterating over non-object: " + b.path);
+				
+			if (setOfParentClasses[b.path])
+				throw new Error("cyclic iterating for " + b.path);
+			setOfParentClasses[b.path] = 1;
             // not putting it into context, logs will be to long
             let searchFieldPrefix = searchedFieldName ? "searching "+searchedFieldName+": " : "";
 
@@ -166,8 +169,10 @@ export function bubble (
                             context.log(searchFieldPrefix+`iterating through parentclass ${pathObj.content} of ${b.path}`);
                             let path = await pathObj.resolve(context.sub("  "));
                             let targetElement = await b.accessChain(context.sub("> "), path);
-                            await targetElement.resolve(context);
-                            resolvedInherit = await targetElement.fieldsIterator(context, searchedFieldName);
+                            // await targetElement.resolve(context);
+							// if (targetElement.resolving)
+							// 	throw new Error();
+                            resolvedInherit = await targetElement.fieldsIterator(context, searchedFieldName, setOfParentClasses);
                             continue;
                         }
                         context.log(searchFieldPrefix+ "iteration over "+b.path+" finished")
