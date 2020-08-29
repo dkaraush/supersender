@@ -1,0 +1,4 @@
+expected: error
+
+result:
+  inherits: result

@@ -1,7 +1,0 @@
-# expected: error
-
-# result:
-#   inherits: result
-
-expected: 1
-result: 1

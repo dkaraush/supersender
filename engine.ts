@@ -11,7 +11,7 @@ type LoggingContext = {
 }
 
 // for good logging
-const makeBaseContext = (disabled: boolean = false) : LoggingContext => ({
+export const makeBaseContext = (disabled: boolean = false) : LoggingContext => ({
 	disabled,
 	ident: "",
 	sub: function (ident) { return {...this, ident: this.ident + ident } },
@@ -122,7 +122,7 @@ export function bubble (
 	        }
 
 	        if (!searchedFieldName)
-	        	context.log(searchFieldPrefix+`iterating and returning all fields of ${b.path}`);
+	        	context.log(searchFieldPrefix + `iterating and returning all fields of ${b.path}`);
 
 	        let alreadyReturnedFieldNames : {[key: string]: number} = { inherits: 1 }; // never return inherits
 	        const markAsReturning_and_checkIfAlreadyReturned = 
@@ -131,7 +131,8 @@ export function bubble (
 			// first we iterate/return fields from this object	        
 	        let fields = Object.keys(b.content); 
 	        // when fields of this object are passed, we resolve inherits one by one
-	        let inherits = 'inherits' in b.content ? [...b.content.inherits.content] : [];
+			let inherits = 'inherits' in b.content ? [...b.content.inherits.content] : [];
+			context.log('inherits = ', inherits);
 	        // contains active inherit which is not yet fully iterated
 	        let resolvedInherit : FieldsIterator | undefined = undefined;
 
@@ -162,9 +163,10 @@ export function bubble (
 						} 
 						if (inherits.length > 0) {
 							let pathObj = inherits.shift();
-							context.log(searchFieldPrefix+`iterating through parentclass ${pathObj.elem} of ${b.path}`);
+							context.log(searchFieldPrefix+`iterating through parentclass ${pathObj.content} of ${b.path}`);
 							let path = await pathObj.resolve(context.sub("  "));
-				            let targetElement = await b.accessChain(context.sub("> "), path);
+							let targetElement = await b.accessChain(context.sub("> "), path);
+							await targetElement.resolve(context);
 							resolvedInherit = await targetElement.fieldsIterator(context, searchedFieldName);
 							continue;
 						}
@@ -192,7 +194,7 @@ export function bubble (
 			if (b.resolving)
 				throw new Error("already resolving "+b.path);
 
-			// do not return 
+			// do not return
 			b.resolving = true;
 			try {
 				context.log(`resolving ${b.type} ${b.path} ${b.type === "string" ? "~= "+b.content : ""}`)
@@ -229,7 +231,7 @@ export function bubble (
 					b.resolved = v;
 				}
 				//  else // primitive type
-				// 	b.resolved = b.elem;
+				// 	b.resolved = b.content;
 			} finally {
 				b.resolving = false;
 			}

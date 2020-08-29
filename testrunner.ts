@@ -2,7 +2,7 @@ import * as fs from 'fs';
 
 import { red, green, grey, bold } from 'kleur';
 import equal from 'deep-equal';
-import resolve from './engine';
+import resolve, { makeBaseContext } from './engine';
 
 const testsFolder = __dirname + "/tests/";
 const isDir = (filename: string) => fs.statSync(testsFolder + filename).isDirectory();

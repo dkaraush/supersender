@@ -1,9 +1,0 @@
-# expected: error
-
-# c: 
-#   inherits: result
-
-# result:
-#   inherits: c
-result: 2
-expected: 2

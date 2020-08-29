@@ -1,0 +1,7 @@
+expected: error
+
+c: 
+  inherits: result
+
+result:
+  inherits: c
