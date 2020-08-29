@@ -107,7 +107,7 @@ export function bubble (
         fieldsIterator: async (context, searchedFieldName?: string, setOfParentClasses: {[key: string]: number} = {}) => {
             if (b.type !== "object")
 				throw new Error("iterating over non-object: " + b.path);
-				
+			
 			if (setOfParentClasses[b.path])
 				throw new Error("cyclic iterating for " + b.path);
 			setOfParentClasses[b.path] = 1;
@@ -172,7 +172,7 @@ export function bubble (
                             // await targetElement.resolve(context);
 							// if (targetElement.resolving)
 							// 	throw new Error();
-                            resolvedInherit = await targetElement.fieldsIterator(context, searchedFieldName, setOfParentClasses);
+                            resolvedInherit = await targetElement.fieldsIterator(context, searchedFieldName, { ...setOfParentClasses });
                             continue;
                         }
                         context.log(searchFieldPrefix+ "iteration over "+b.path+" finished")
